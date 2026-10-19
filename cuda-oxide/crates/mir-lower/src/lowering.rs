@@ -305,7 +305,7 @@ pub fn convert_func(
     }
     propagate_return_abi_alignment(ctx, &llvm_func, return_abi_alignment);
 
-    propagate_alwaysinline_attr(ctx, op, &llvm_func);
+    lower_inline_intent_attr(ctx, &mir_func, &llvm_func);
 
     let llvm_entry = llvm_func.get_or_create_entry_block(ctx);
 
@@ -876,33 +876,34 @@ fn propagate_return_abi_alignment(
         .set(key, IntegerAttr::new(u64_ty, value));
 }
 
-/// Propagate the `alwaysinline` attribute from MIR func to LLVM func.
+/// Lower the MIR func's `#[inline]` request (`MirFuncOp::inline_intent`) to
+/// its LLVM function attribute in the LLVM func's `llvm_func_attrs`, which
+/// `llvm-export` renders like any other. The mapping is rustc's own:
+/// `#[inline]` is `inlinehint`, `#[inline(always)]` is `alwaysinline` and
+/// `#[inline(never)]` is `noinline`. This is the only place that names the
+/// LLVM keywords; the dialect records the request, not the LLVM attribute.
 ///
-/// Set on the MIR func op by `mir-importer` when the source Rust function
-/// carries `#[inline(always)]`. The LLVM exporter then emits the
-/// `alwaysinline` keyword on the `define` line. Existing `opt -O2` runs can
-/// honor that attribute before `llc`, but this propagation is not a mandatory
-/// always-inline pass. The goal is to preserve Rust's inline intent for device
-/// helpers rather than leaving helper boundaries solely to optimizer
+/// `opt -O2` honors the keyword before `llc`; this adds no inliner pass. The
+/// goal is to preserve Rust's inline intent for device helpers in both
+/// directions, rather than leaving helper boundaries solely to optimizer
 /// heuristics.
-fn propagate_alwaysinline_attr(
-    ctx: &mut Context,
-    mir_op: Ptr<Operation>,
-    llvm_func: &llvm::FuncOp,
-) {
-    let key: pliron::identifier::Identifier = "alwaysinline".try_into().unwrap();
-    let attr_opt = mir_op
-        .deref(ctx)
-        .attributes
-        .get::<pliron::builtin::attributes::StringAttr>(&key)
-        .cloned();
-    if let Some(attr) = attr_opt {
-        llvm_func
-            .get_operation()
-            .deref_mut(ctx)
-            .attributes
-            .set(key, attr);
-    }
+fn lower_inline_intent_attr(ctx: &mut Context, mir_func: &MirFuncOp, llvm_func: &llvm::FuncOp) {
+    use dialect_mir::attributes::InlineIntentAttr;
+
+    let Some(intent) = mir_func.inline_intent(ctx) else {
+        return;
+    };
+    let keyword = match intent {
+        InlineIntentAttr::Hint => "inlinehint",
+        InlineIntentAttr::Always => "alwaysinline",
+        InlineIntentAttr::Never => "noinline",
+    };
+    let mut attrs = llvm_func
+        .get_attr_llvm_func_attrs(ctx)
+        .map(|attrs| (*attrs).clone())
+        .unwrap_or_default();
+    attrs.set(keyword, llvm::LlvmAttrValue::Unit);
+    llvm_func.set_attr_llvm_func_attrs(ctx, attrs);
 }
 
 // =====================================================================
