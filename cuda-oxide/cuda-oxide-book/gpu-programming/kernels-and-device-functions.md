@@ -513,6 +513,25 @@ In practice this means:
   once the call is dropped. Reach for `gpu_printf!` before the check when you
   need to see the values, or `gpu_assert!` for an explicit check.
 
+A device function declared `-> !` with a real body is different. It never
+returns to its caller, for example because it writes an error code and then
+runs `loop {}`. The compiler calls it like any other function and places
+`unreachable` after the call, so the work it does before diverging is kept.
+Three cases still lower to the device trap instead: the panic entry points in
+`core::panicking`, a `-> !` body that is nothing but a panic, and a call
+through a function pointer.
+
+```{figure} images/diverging-call-lowering.svg
+:align: center
+:width: 100%
+
+How a call to a `-> !` device function lowers. Left, the Rust source: `write_then_diverge` stores a
+value and then loops. Middle, what the importer used to emit: the call replaced by `trap;`, so the
+store never happened. Right, what it emits now: the call, then `unreachable`, so the PTX stores the
+value and spins. Panic entry points, panic-only `-> !` bodies and calls through function pointers
+still lower to the trap.
+```
+
 :::{seealso}
 The [Error Handling and Debugging](error-handling-and-debugging.md) chapter
 covers `gpu_printf!`, `gpu_assert!`, and `cargo oxide debug` for diagnosing
