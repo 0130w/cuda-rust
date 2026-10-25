@@ -45,8 +45,9 @@ pub fn debug_kernel(data: &[f32], mut out: DisjointSlice<f32>) {
     if idx.get() < 4 {
         gpu_printf!("Thread {} sees value {}\n", idx.get(), data[idx.get()]);
     }
+    let i = idx.get();
     if let Some(out_elem) = out.get_mut(idx) {
-        *out_elem = data[idx.get()] * 2.0;
+        *out_elem = data[i] * 2.0;
     }
 }
 ```
@@ -96,8 +97,9 @@ pub fn checked_kernel(data: &[f32], len: u32, mut out: DisjointSlice<f32>) {
         "expected non-negative input"
     );
 
+    let i = idx.get();
     if let Some(out_elem) = out.get_mut(idx) {
-        *out_elem = data[idx.get()];
+        *out_elem = data[i];
     }
 }
 ```
