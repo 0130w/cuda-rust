@@ -82,7 +82,7 @@ the GPU. `gpu_printf!` bypasses all of this by lowering directly to a CUDA
 For fatal error checking on the device, use `gpu_assert!` or `debug::trap()`:
 
 ```rust
-use cuda_device::{DisjointSlice, debug, gpu_assert, kernel, thread};
+use cuda_device::{DisjointSlice, gpu_assert, kernel, thread};
 
 #[kernel]
 pub fn checked_kernel(data: &[f32], len: u32, mut out: DisjointSlice<f32>) {
